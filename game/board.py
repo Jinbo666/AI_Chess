@@ -95,10 +95,6 @@ class Board:
         
         return True  # 移动成功
 
-    # def get_all_possible_moves(self, piece):
-    #     # 这里返回所有可能的移动位置，后续可以根据棋子类型和规则实现具体逻辑
-    #     return [(piece.position[0] + dx, piece.position[1] + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if not (dx == 0 and dy == 0)]
-    
     def get_all_possible_moves(self, piece):
         """获取给定棋子的所有可能移动位置"""
         possible_moves = []
@@ -477,40 +473,40 @@ class Board:
                 return position
         return None
 
-    def get_all_possible_moves(self, piece):
-        """获取给定棋子的所有可能移动位置"""
-        possible_moves = []
+    # def get_all_possible_moves(self, piece):
+    #     """获取给定棋子的所有可能移动位置"""
+    #     possible_moves = []
 
-        if piece.name in ["兵", "卒"]:
-            x, y = piece.position
-            moves = []
+    #     if piece.name in ["兵", "卒"]:
+    #         x, y = piece.position
+    #         moves = []
 
-            # 判断是否过河
-            crossed_river = y > 4 if piece.color == "red" else y < 5
+    #         # 判断是否过河
+    #         crossed_river = y > 4 if piece.color == "red" else y < 5
 
-            # 未过河之前，只能前进
-            if not crossed_river:
-                step = -1 if piece.color == "red" else 1
-                new_y = y + step
-                if 0 <= new_y < 10:  # 确保不超出棋盘边界
-                    possible_moves.append((x, new_y))
+    #         # 未过河之前，只能前进
+    #         if not crossed_river:
+    #             step = -1 if piece.color == "red" else 1
+    #             new_y = y + step
+    #             if 0 <= new_y < 10:  # 确保不超出棋盘边界
+    #                 possible_moves.append((x, new_y))
             
-            # 过河后，可以左右移动
-            else:
-                steps = [(-1, 0), (1, 0)]  # 左右移动
-                if piece.color == "red":
-                    steps.append((0, -1))  # 红方向上移动
-                else:
-                    steps.append((0, 1))  # 黑方向下移动
+    #         # 过河后，可以左右移动
+    #         else:
+    #             steps = [(-1, 0), (1, 0)]  # 左右移动
+    #             if piece.color == "red":
+    #                 steps.append((0, -1))  # 红方向上移动
+    #             else:
+    #                 steps.append((0, 1))  # 黑方向下移动
 
-                for dx, dy in steps:
-                    new_x, new_y = x + dx, y + dy
-                    if 0 <= new_x < 9 and 0 <= new_y < 10:  # 确保移动后仍在棋盘内
-                        possible_moves.append((new_x, new_y))
+    #             for dx, dy in steps:
+    #                 new_x, new_y = x + dx, y + dy
+    #                 if 0 <= new_x < 9 and 0 <= new_y < 10:  # 确保移动后仍在棋盘内
+    #                     possible_moves.append((new_x, new_y))
 
-        # 其他棋子的逻辑...
-        print('posible_moves:', possible_moves)
-        return possible_moves
+    #     # 其他棋子的逻辑...
+    #     # print('posible_moves:', possible_moves)
+    #     return possible_moves
 
     def is_in_check(self, king_color):
         """检查王（将/帅）是否处于将军状态"""

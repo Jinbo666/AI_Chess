@@ -2,12 +2,11 @@ import pygame
 import sys
 from game.board import Board
 from game.util.const import *
+from ai.random_ai import RandomAI
 
 # 初始化pygame
 pygame.init()
-current_player = "human"  # 或"ai"，取决于谁先开始
 current_player_color = "red"  # 游戏开始时红方先行
-
 
 # 设置窗口大小和标题
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -15,8 +14,11 @@ pygame.display.set_caption('Simple Chinese Chess')
 
 # 创建棋盘
 board = Board()
+ai_player = RandomAI(board, "black")  # 创建AI实例
 
 
+font_path = 'assets/font/微软雅黑.ttf'  # 字体文件路径，根据实际情况调整
+font_gameover = pygame.font.Font(font_path, FONT_SIZE_CHUHE_HANJIE)  # 加载字体文件，40是字体大小
 
 def draw_board(screen):
     """绘制棋盘背景和线条"""
@@ -92,6 +94,30 @@ def draw_pieces(screen, pieces):
         text_rect = text.get_rect(center=(center_x, center_y))
         screen.blit(text, text_rect)
 
+def is_game_over():
+    # 检查双方的“将”和“帅”是否还在棋盘上
+    kings = {"red": False, "black": False}
+    for piece in board.pieces.values():
+        if (piece.name in ["将", "帅"]) and piece.color == "red":
+            kings["red"] = True
+        elif (piece.name in ["将", "帅"]) and piece.color == "black":
+            kings["black"] = True
+
+    # 如果任一方的“将”或“帅”不在棋盘上，则游戏结束
+    if not kings["red"]:
+        return "black"
+    elif not kings["black"]:
+        return "red"
+    return None
+
+def show_victory_message(screen, winner):
+    message = f"{winner}方获胜！"
+    text_surface = font_gameover.render(message, True, (255, 0, 0))
+    text_rect = text_surface.get_rect(center=(400, 300))  # 假设屏幕尺寸为800x600
+    screen.blit(text_surface, text_rect)
+    pygame.display.flip()
+    pygame.time.wait(5000)  # 显示5秒胜利信息
+
 
 def draw_selection(screen, position):
     x, y = position
@@ -130,10 +156,17 @@ selected_piece = None  # 选中的棋子
 selected_pos = None  # 选中棋子的位置
 
 while True:
-    if current_player == "human":
-        # 处理玩家移动...
-        # 处理人类玩家的操作
-        # 例如，等待玩家点击棋盘并尝试移动棋子
+    
+    winner = is_game_over()
+    if winner:
+        show_victory_message(screen, winner)
+        pygame.time.wait(5000)  # 等待一段时间后退出，或者处理其他的结束游戏逻辑
+        break  # 跳出游戏循环
+
+    # 处理玩家移动...
+    # 处理人类玩家的操作
+    # 例如，等待玩家点击棋盘并尝试移动棋子
+    if current_player_color == "red":  # 人类玩家的回合
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -177,21 +210,20 @@ while True:
                     # 如果点击在棋盘外，取消选中状态
                     selected_piece = None
                     selected_pos = None
-            # 如果移动成功，切换到AI回合
-            # if human_makes_a_move():
-            current_player = "ai"
 
-    # 如果是AI回合
-    elif current_player == "ai":
-        # 让AI进行操作
-        # ai.make_move()
-        # AI操作后，切换回人类玩家
-        current_player = "human"
+    elif current_player_color == "black":  # AI玩家的回合
+        ai_player.make_move()  # 让AI进行一次移动
+        current_player_color = "red"  # 轮换到人类玩家
+        # 可以在这里添加检查游戏状态的代码（如检查是否将军）            
 
 
-    
+    # 绘制棋盘和棋子的代码
     draw_board(screen)
     if selected_pos:
         draw_selection(screen, selected_pos)
     draw_pieces(screen, board.pieces)
     pygame.display.flip()
+
+    # 延迟，让AI的移动有一个短暂的间隔，便于观察
+    # pygame.time.delay(500)
+
