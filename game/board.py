@@ -1,51 +1,34 @@
+# import pygame
 from .pieces import Piece
 from game.util.const import *
 
 class Board:
-    def __init__(self):
+    def __init__(self, pygame):
         self.board = [[None for _ in range(9)] for _ in range(10)]  # 中国象棋的棋盘为9x10
         self.pieces = {}  # 存储所有棋子的列表
+        self.last_captured_piece = None  # 存储最后被捕获的棋子信息
         self.setup_pieces()
+        self.legal_moves = []  # 存储合法移动的列表
+        self.current_player = 'red'  # 假设红方先行
+        
+        self.pygame = pygame
+        # 设置窗口大小和标题
+        self.screen = self.pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+        self.pygame.display.set_caption('中国象棋')
+        
+        self.font_path = 'assets/font/微软雅黑.ttf'  # 字体文件路径，根据实际情况调整
+
+        
+
 
     def setup_pieces(self):
-        # 用于初始化棋盘上的棋子位置和对象
-        self.add_piece((0, 0), Piece('black', '车', (0, 0), '车'))
-        self.add_piece((1, 0), Piece('black', '马', (1, 0), '马'))
-        self.add_piece((2, 0), Piece('black', '相', (2, 0), '相'))
-        self.add_piece((3, 0), Piece('black', '仕', (3, 0), '仕'))
-        self.add_piece((4, 0), Piece('black', '帅', (4, 0), '帅'))
-        self.add_piece((5, 0), Piece('black', '仕', (5, 0), '仕'))
-        self.add_piece((6, 0), Piece('black', '相', (6, 0), '相'))
-        self.add_piece((7, 0), Piece('black', '马', (7, 0), '马'))
-        self.add_piece((8, 0), Piece('black', '车', (8, 0), '车'))
-        self.add_piece((1, 2), Piece('black', '炮', (1, 2), '炮'))
-        self.add_piece((7, 2), Piece('black', '炮', (7, 2), '炮'))
-        self.add_piece((0, 3), Piece('black', '兵', (0, 3), '兵'))
-        self.add_piece((2, 3), Piece('black', '兵', (2, 3), '兵'))
-        self.add_piece((4, 3), Piece('black', '兵', (4, 3), '兵'))
-        self.add_piece((6, 3), Piece('black', '兵', (6, 3), '兵'))
-        self.add_piece((8, 3), Piece('black', '兵', (8, 3), '兵'))
-        # 添加其他黑方棋子的初始化...
-        self.add_piece((0, 9), Piece('red', '车', (0, 9), '车'))
-        self.add_piece((1, 9), Piece('red', '马', (1, 9), '马'))
-        self.add_piece((2, 9), Piece('red', '象', (2, 9), '象'))
-        self.add_piece((3, 9), Piece('red', '士', (3, 9), '士'))
-        self.add_piece((4, 9), Piece('red', '帅', (4, 9), '帅'))
-        self.add_piece((5, 9), Piece('red', '士', (5, 9), '士'))
-        self.add_piece((6, 9), Piece('red', '象', (6, 9), '象'))
-        self.add_piece((7, 9), Piece('red', '马', (7, 9), '马'))
-        self.add_piece((8, 9), Piece('red', '车', (8, 9), '车'))
-        self.add_piece((1, 7), Piece('red', '炮', (1, 7), '炮'))
-        self.add_piece((7, 7), Piece('red', '炮', (7, 7), '炮'))
-        self.add_piece((0, 6), Piece('red', '兵', (0, 6), '兵'))
-        self.add_piece((2, 6), Piece('red', '兵', (2, 6), '兵'))
-        self.add_piece((4, 6), Piece('red', '兵', (4, 6), '兵'))
-        self.add_piece((6, 6), Piece('red', '兵', (6, 6), '兵'))
-        self.add_piece((8, 6), Piece('red', '兵', (8, 6), '兵'))
+        self.pieces = {}
+        # 使用initial_pieces来初始化棋盘上的棋子
+        for piece_info in initial_pieces:
+            position = piece_info['position']
+            piece = Piece(piece_info['color'], piece_info['type'], position, piece_info['type'])
+            self.add_piece(position, piece)
 
-
-        # for pos, piece in positions:
-        #     self.add_piece(pos, piece)
 
     def add_piece(self, position, piece):
         """在棋盘上添加一个棋子"""
@@ -54,10 +37,8 @@ class Board:
 
 
     def get_piece_at(self, position):
-        for pos in self.pieces:
-            if pos == position:
-                return self.pieces[pos]
-        return None
+       return self.pieces.get(position, None)
+    
     def remove_piece(self, position):
         """从棋盘上移除位于给定位置的棋子"""
         if position in self.pieces:
@@ -75,17 +56,30 @@ class Board:
         # 更新棋子对象的位置属性（如果有）
         piece.position = (target_x, target_y)
 
+    def last_move_captured_piece(self):
+        # 返回最后一次移动捕获的棋子对象
+        return self.last_captured_piece
+
     def move_piece(self, piece, target_x, target_y):
+        # 假设在每次移动前，重置最后被捕获的棋子信息
+        self.last_captured_piece = None
+
+        # 假设self.pieces以某种方式存储了棋子的位置和对象
+        (start_x, start_y) = piece.position
+        moving_piece = self.pieces.get((start_x, start_y))
         # 检查目标位置是否为己方棋子
         target_piece = self.get_piece_at((target_x, target_y))
         if target_piece and target_piece.color == piece.color:
-            print("不能吃掉己方棋子。")
+            # print("不能吃掉己方棋子。")
             return False  # 阻止移动
 
-        # 如果目标位置有对方棋子，则吃掉它
+        # 如果目标位置有对方棋子，则吃掉它, 则视为被捕获
         if target_piece and target_piece.color != piece.color:
-            print(f"吃掉对方的{target_piece.name}")
+            self.last_captured_piece = target_piece
+            # print(f"吃掉对方的{target_piece.name}")
             self.remove_piece(target_piece)  # 假设有一个方法来处理棋子的移除
+        else:
+            self.last_captured_piece = None
 
         # 更新棋子位置（假设有一个方法来设置棋子的新位置）
         self.set_piece_position(piece, target_x, target_y)
@@ -110,15 +104,19 @@ class Board:
                     y += dy
                     if not (0 <= x < 9 and 0 <= y < 10):  # 确保在棋盘范围内
                         break
-                    if not found_barrier and not self.get_piece_at((x, y)):
+                    current_piece = self.get_piece_at((x, y))
+                    if not found_barrier and not current_piece:
                         possible_moves.append((x, y))  # 不吃子时的移动
-                    elif self.get_piece_at((x, y)):
+                    elif current_piece:
                         found_barrier = True
                         continue
-                    elif found_barrier and self.get_piece_at((x, y)):
-                        break  # 找到第二个棋子，停止搜索该方向
-                    elif found_barrier and not self.get_piece_at((x, y)):
-                        possible_moves.append((x, y))  # 吃子时的移动
+                    elif found_barrier and current_piece:
+                        # 找到第二个棋子，停止搜索该方向
+                        if current_piece.color != piece.color:
+                            possible_moves.append((x, y))  # 吃子时的移动
+                        break  # 无论是否吃子，都应停止搜索该方向
+                    # elif found_barrier and not current_piece:
+                    #     possible_moves.append((x, y))  # 吃子时的移动
         if piece.name == "车":
             directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]  # 四个基本方向：右，左，下，上
             for dx, dy in directions:
@@ -130,7 +128,8 @@ class Board:
                         break
                     if self.get_piece_at((x, y)):
                         # “车”在遇到其他棋子时停止，可以吃掉对方的棋子
-                        possible_moves.append((x, y))
+                        if self.get_piece_at((x, y)).color != piece.color:
+                            possible_moves.append((x, y))
                         break
                     else:
                         possible_moves.append((x, y))
@@ -146,16 +145,20 @@ class Board:
                 if not (0 <= target_x < 9 and 0 <= target_y < 10):
                     continue
                 
-                # 检查“蹩马腿”位置是否有棋子阻挡
-                leg_x = x + dx // 2 if dx % 2 == 0 else x
-                leg_y = y + dy // 2 if dy % 2 == 0 else y
-                
+                # 计算“蹩马腿”的位置。对于横向移动两格的情况，蹩马腿位于横向中间；纵向移动两格的情况类似。
+                if abs(dx) == 2:  # 如果是横向移动两格
+                    leg_x, leg_y = x + dx // 2, y
+                else:  # 如果是纵向移动两格
+                    leg_x, leg_y = x, y + dy // 2
+
                 if self.get_piece_at((leg_x, leg_y)):
                     # 如果“马腿”位置有棋子，不能移动
                     continue
 
-                # 添加到可能的移动位置
-                possible_moves.append((target_x, target_y))
+                target_piece = self.get_piece_at((target_x, target_y))
+                # 检查目标位置是否为空或被对方棋子占据
+                if not target_piece or (target_piece and target_piece.color != piece.color):
+                    possible_moves.append((target_x, target_y))
 
         if piece.name in ["士", "仕"]:
             # 士的移动可以是4个斜向方向
@@ -165,12 +168,13 @@ class Board:
                 target_x = x + dx
                 target_y = y + dy
                 
+                target_piece = self.get_piece_at((target_x, target_y))
                 # 确保目标位置在九宫内
                 if piece.color == "red":
-                    if 3 <= target_x <= 5 and 7 <= target_y <= 9:
+                    if 3 <= target_x <= 5 and 7 <= target_y <= 9 and (not target_piece or target_piece.color != piece.color):
                         possible_moves.append((target_x, target_y))
                 else:  # 黑方士的九宫格范围
-                    if 3 <= target_x <= 5 and 0 <= target_y <= 2:
+                    if 3 <= target_x <= 5 and 0 <= target_y <= 2 and (not target_piece or target_piece.color != piece.color):
                         possible_moves.append((target_x, target_y))
 
         if piece.name in ["象", "相"]:
@@ -183,6 +187,11 @@ class Board:
                 
                 # 确保目标位置在棋盘内
                 if not (0 <= target_x < 9 and 0 <= target_y < 10):
+                    continue
+                     
+                # 检查目标位置是否被己方棋子占据
+                target_piece = self.get_piece_at((target_x, target_y))
+                if target_piece and target_piece.color == piece.color:
                     continue
                 
                 # 检查“象”是否过河
@@ -201,8 +210,36 @@ class Board:
                 # 如果“象眼”没有被阻挡，且不过河，该移动是可能的
                 possible_moves.append((target_x, target_y))
 
+        if piece.name in ["将", "帅"]:
+            # 将/帅的移动可以是4个基本方向：上，下， 左，右
+            moves = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+            for dx, dy in moves:
+                x, y = piece.position
+                target_x = x + dx
+                target_y = y + dy
+                
+                # 确保目标位置在九宫内
+                if piece.color == "red" and not (3 <= target_x <= 5 and 7 <= target_y <= 9):
+                    continue
+                elif piece.color == "black" and not (3 <= target_x <= 5 and 0 <= target_y <= 2):
+                    continue
 
-
+                # 检查目标位置是否被己方棋子占据
+                target_piece = self.get_piece_at((target_x, target_y))
+                if target_piece and target_piece.color == piece.color:
+                    continue
+                
+                # 模拟执行这个移动
+                original_position = piece.position
+                piece.position = (target_x, target_y)  # 暂时更新位置来检查将帅面对面规则
+                if self.check_generals_face_to_face():
+                    piece.position = original_position  # 如果会导致将帅面对面，则撤销模拟移动
+                    continue  # 跳过这个移动
+                piece.position = original_position  # 撤销模拟移动
+                
+                # 如果移动合法，则添加到可能的移动位置
+                possible_moves.append((target_x, target_y))
+        
         if piece.name in ["将", "帅"]:
             # 将/帅的移动可以是4个基本方向：上，下，左，右
             moves = [(0, 1), (0, -1), (1, 0), (-1, 0)]
@@ -213,33 +250,51 @@ class Board:
                 
                 # 确保目标位置在九宫内
                 if piece.color == "red":
-                    if 3 <= target_x <= 5 and 7 <= target_y <= 9:
-                        possible_moves.append((target_x, target_y))
+                    if not (3 <= target_x <= 5 and 7 <= target_y <= 9):
+                        continue
                 else:  # 黑方帅的九宫格范围
-                    if 3 <= target_x <= 5 and 0 <= target_y <= 2:
-                        possible_moves.append((target_x, target_y))
-        if piece.name in ["兵", "卒"]:
-            x, y = piece.position
-            moves = []
-
-            # 根据兵/卒的颜色和位置判断可能的移动
-            if piece.color == "red":
-                # 红方兵未过河前只能向上移动
-                moves.append((0, -1)) if y > 4 else moves.extend([(0, -1), (1, 0), (-1, 0)])
-            else:  # 黑方卒未过河前只能向下移动
-                moves.append((0, 1)) if y < 5 else moves.extend([(0, 1), (1, 0), (-1, 0)])
-
-            # 检查每个可能的移动是否在棋盘范围内
-            for dx, dy in moves:
-                target_x = x + dx
-                target_y = y + dy
-
-                if 0 <= target_x < 9 and 0 <= target_y < 10:
-                    possible_moves.append((target_x, target_y))
+                    if not (3 <= target_x <= 5 and 0 <= target_y <= 2):
+                        continue
+                        
+                target_piece = self.get_piece_at((target_x, target_y))
+                # 检查目标位置是否被己方棋子占据
+                if target_piece and target_piece.color == piece.color:
+                    continue
+                        
+                # 添加到可能的移动位置
+                possible_moves.append((target_x, target_y))
 
         return possible_moves
     
 
+    def check_generals_face_to_face(self):
+        # 找到“将”和“帅”的位置
+        red_general_position = None
+        black_general_position = None
+        for position, piece in self.pieces.items():
+            if piece.name in ["将", "帅"] and piece.color == "red":
+                red_general_position = position
+            elif piece.name in ["将", "帅"] and piece.color == "black":
+                black_general_position = position
+
+        # 如果任一方的将/帅不在棋盘上，则不需要进一步检查
+        if not red_general_position or not black_general_position:
+            return False
+
+        # 检查是否在同一列
+        if red_general_position[0] != black_general_position[0]:
+            return False
+
+        # 遍历两者之间的格子
+        start_y = min(red_general_position[1], black_general_position[1]) + 1
+        end_y = max(red_general_position[1], black_general_position[1])
+        for y in range(start_y, end_y):
+            if self.get_piece_at((red_general_position[0], y)):
+                # 如果这一列中间有任何棋子，将/帅不算面对面
+                return False
+
+        # 如果这一列中间没有任何棋子，将/帅算作面对面
+        return True
 
     def is_valid_move(self, piece, target_x, target_y):
         # 基本的移动规则验证逻辑
@@ -252,7 +307,6 @@ class Board:
 
         if piece.name == "马":
             return self.validate_knight_move(piece, target_x, target_y)
-
 
         if piece.name == "炮":
             return self.validate_cannon_move(piece, target_x, target_y)
@@ -473,42 +527,8 @@ class Board:
                 return position
         return None
 
-    # def get_all_possible_moves(self, piece):
-    #     """获取给定棋子的所有可能移动位置"""
-    #     possible_moves = []
 
-    #     if piece.name in ["兵", "卒"]:
-    #         x, y = piece.position
-    #         moves = []
-
-    #         # 判断是否过河
-    #         crossed_river = y > 4 if piece.color == "red" else y < 5
-
-    #         # 未过河之前，只能前进
-    #         if not crossed_river:
-    #             step = -1 if piece.color == "red" else 1
-    #             new_y = y + step
-    #             if 0 <= new_y < 10:  # 确保不超出棋盘边界
-    #                 possible_moves.append((x, new_y))
-            
-    #         # 过河后，可以左右移动
-    #         else:
-    #             steps = [(-1, 0), (1, 0)]  # 左右移动
-    #             if piece.color == "red":
-    #                 steps.append((0, -1))  # 红方向上移动
-    #             else:
-    #                 steps.append((0, 1))  # 黑方向下移动
-
-    #             for dx, dy in steps:
-    #                 new_x, new_y = x + dx, y + dy
-    #                 if 0 <= new_x < 9 and 0 <= new_y < 10:  # 确保移动后仍在棋盘内
-    #                     possible_moves.append((new_x, new_y))
-
-    #     # 其他棋子的逻辑...
-    #     # print('posible_moves:', possible_moves)
-    #     return possible_moves
-
-    def is_in_check(self, king_color):
+    def check_for_check(self, king_color):
         """检查王（将/帅）是否处于将军状态"""
         king_position = self.get_king_position(king_color)
         if not king_position:
@@ -517,6 +537,190 @@ class Board:
         for _, piece in self.pieces.items():
             if piece.color == opponent_color:
                 possible_moves = self.get_all_possible_moves(piece)
+                # print(piece.name, piece.color, possible_moves)
                 if king_position in possible_moves:
                     return True  # 如果对方有棋子能攻击到王的位置，则处于将军状态
         return False
+    
+    def check_for_victory(self):
+        # 检查双方的“将”和“帅”是否还在棋盘上
+        kings = {"red": False, "black": False}
+        for piece in self.pieces.values():
+            if (piece.name in ["将", "帅"]) and piece.color == "red":
+                kings["red"] = True
+            elif (piece.name in ["将", "帅"]) and piece.color == "black":
+                kings["black"] = True
+
+        # 如果任一方的“将”或“帅”不在棋盘上，则游戏结束
+        if not kings["red"]:
+            return "black"
+        elif not kings["black"]:
+            return "red"
+        return None
+
+    def draw_board(self):
+        """绘制棋盘背景和线条"""
+        self.screen.fill(BG_COLOR)
+
+        # 绘制棋盘的线条等
+
+        # 定义棋盘的起始点和终点坐标
+        start_x, start_y = BOARD_START_X, BOARD_START_Y
+        end_x, end_y = WINDOW_WIDTH - BOARD_START_X, WINDOW_HEIGHT - BOARD_START_Y
+        cell_width = (end_x - start_x) / 8
+        cell_height = (end_y - start_y) / 9
+
+        # 绘制棋盘的线条
+        for i in range(10):  # 横线
+            self.pygame.draw.line(self.screen, BLACK, (start_x, start_y + i*cell_height), (end_x, start_y + i*cell_height), 2)
+        for i in range(9):  # 竖线
+            if i == 0 or i == 8:  # 第一条和最后一条竖线贯穿整个棋盘
+                self.pygame.draw.line(self.screen, BLACK, (start_x + i*cell_width, start_y), (start_x + i*cell_width, end_y), 2)
+            else:  # 其他竖线只在楚河汉界两侧绘制
+                self.pygame.draw.line(self.screen, BLACK, (start_x + i*cell_width, start_y), (start_x + i*cell_width, start_y + 4*cell_height), 2)
+                self.pygame.draw.line(self.screen, BLACK, (start_x + i*cell_width, start_y + 5*cell_height), (start_x + i*cell_width, end_y), 2)
+
+        # 绘制九宫格的斜线
+        self.pygame.draw.line(self.screen, BLACK, (start_x + 3*cell_width, start_y), (start_x + 5*cell_width, start_y + 2*cell_height), 2)
+        self.pygame.draw.line(self.screen, BLACK, (start_x + 3*cell_width, start_y + 2*cell_height), (start_x + 5*cell_width, start_y), 2)
+        self.pygame.draw.line(self.screen, BLACK, (start_x + 3*cell_width, end_y - 2*cell_height), (start_x + 5*cell_width, end_y), 2)
+        self.pygame.draw.line(self.screen, BLACK, (start_x + 3*cell_width, end_y), (start_x + 5*cell_width, end_y - 2*cell_height), 2)
+
+
+        # 初始化字体
+        font_chuhe_hanjie = self.pygame.font.Font(self.font_path, FONT_SIZE_CHUHE_HANJIE)  # 加载字体文件，40是字体大小
+
+        # 渲染‘楚河’和‘汉界’文本
+        text_chuhe = font_chuhe_hanjie.render('楚河', True, BLACK)
+        text_hanjie = font_chuhe_hanjie.render('汉界', True, BLACK)
+
+        # 计算文本位置
+        text_chuhe_pos = ((WINDOW_WIDTH - text_chuhe.get_width()) / 2 - 80, (WINDOW_HEIGHT / 2 - text_chuhe.get_height() / 2))
+        text_hanjie_pos = ((WINDOW_WIDTH - text_hanjie.get_width()) / 2 + 80, (WINDOW_HEIGHT / 2 - text_hanjie.get_height() / 2))
+
+        # 绘制文本
+        self.screen.blit(text_chuhe, text_chuhe_pos)
+        self.screen.blit(text_hanjie, text_hanjie_pos)
+
+
+    def draw_pieces(self, pieces):
+        font_piece = self.pygame.font.Font(self.font_path, FONT_SIZE_CHESS)  # 使用指定的中文字体和字体大小
+        
+        """绘制棋子，适应新的窗口大小"""
+        for position in pieces:
+            piece = pieces[position]
+            # print(piece)
+            x, y = position #piece.position
+            # 假设每个格子大小为 80 像素，调整棋子的绘制位置
+            # 这里的 40 是新格子尺寸的一半，用于计算棋子的中心位置
+            
+            center_x = (x * CELL_SIZE) + BOARD_START_X# + CELL_SIZE // 2
+            center_y = (y * CELL_SIZE) + BOARD_START_Y# + CELL_SIZE // 2
+
+            
+            # 绘制棋子背景圆形
+            
+            if piece.color == 'red':
+                self.pygame.draw.circle(self.screen, (255, 0, 0), (center_x, center_y), CELL_SIZE // 2 - 5)  # 红色棋子
+            else:
+                self.pygame.draw.circle(self.screen, (0, 0, 0), (center_x, center_y), CELL_SIZE // 2 - 5)  # 黑色棋子
+
+            # 绘制棋子上的文字
+            text = font_piece.render(piece.chinese_name, True, (255, 255, 255))  # 假设文字颜色为白色
+            text_rect = text.get_rect(center=(center_x, center_y))
+            self.screen.blit(text, text_rect)
+
+
+    def draw_selection(self, position):
+        x, y = position
+        x -= 0.5
+        y -= 0.5
+        mark_length = 10  # 线段长度
+        # 定义四组线段的坐标，每组对应一个角落的两条线
+        lines = [
+            # 左上角
+            ((x * CELL_SIZE + BOARD_START_X, y * CELL_SIZE + BOARD_START_Y + mark_length),
+            (x * CELL_SIZE + BOARD_START_X, y * CELL_SIZE + BOARD_START_Y),
+            (x * CELL_SIZE + BOARD_START_X + mark_length, y * CELL_SIZE + BOARD_START_Y)),
+            
+            # 右上角
+            ((x * CELL_SIZE + BOARD_START_X + CELL_SIZE - mark_length, y * CELL_SIZE + BOARD_START_Y),
+            (x * CELL_SIZE + BOARD_START_X + CELL_SIZE, y * CELL_SIZE + BOARD_START_Y),
+            (x * CELL_SIZE + BOARD_START_X + CELL_SIZE, y * CELL_SIZE + BOARD_START_Y + mark_length)),
+            
+            # 左下角
+            ((x * CELL_SIZE + BOARD_START_X, y * CELL_SIZE + BOARD_START_Y + CELL_SIZE - mark_length),
+            (x * CELL_SIZE + BOARD_START_X, y * CELL_SIZE + BOARD_START_Y + CELL_SIZE),
+            (x * CELL_SIZE + BOARD_START_X + mark_length, y * CELL_SIZE + BOARD_START_Y + CELL_SIZE)),
+            
+            # 右下角
+            ((x * CELL_SIZE + BOARD_START_X + CELL_SIZE - mark_length, y * CELL_SIZE + BOARD_START_Y + CELL_SIZE),
+            (x * CELL_SIZE + BOARD_START_X + CELL_SIZE, y * CELL_SIZE + BOARD_START_Y + CELL_SIZE),
+            (x * CELL_SIZE + BOARD_START_X + CELL_SIZE, y * CELL_SIZE + BOARD_START_Y + CELL_SIZE - mark_length)),
+        ]
+        
+        for line in lines:
+            self.pygame.draw.lines(self.screen, (255, 0, 0), False, line[:2], 2)
+            self.pygame.draw.lines(self.screen, (255, 0, 0), False, line[1:], 2)
+
+
+    def show_victory_message(self, winner):
+        message = f"{winner}方获胜！"
+
+
+        font_gameover = self.pygame.font.Font(self.font_path, FONT_SIZE_CHUHE_HANJIE)  # 加载字体文件，40是字体大小
+
+        text_surface = font_gameover.render(message, True, (255, 0, 0))
+        text_rect = text_surface.get_rect(center=(400, 300))  # 假设屏幕尺寸为800x600
+        self.screen.blit(text_surface, text_rect)
+        self.pygame.display.flip()
+        self.pygame.time.wait(5000)  # 显示5秒胜利信息
+
+    def render_human(self):
+        self.draw_board()
+        self.draw_pieces(self.pieces)
+        self.pygame.display.flip()
+
+
+    def update_legal_moves(self):
+        # 清空当前合法移动列表
+        self.legal_moves.clear()
+
+        # 假设有一个方法来计算每个棋子的合法移动，并将它们添加到列表中
+        for piece in self.pieces.values():
+            if piece.color == self.current_player:  # 这里检查棋子颜色是否匹配当前行动方
+                piece_legal_moves = self.get_all_possible_moves(piece)
+                (start_x, start_y) = piece.position
+                for move in piece_legal_moves:
+                    (end_x, end_y) = move
+                    if (start_x, start_y, end_x, end_y) not in self.legal_moves:
+                        self.legal_moves.append((start_x, start_y, end_x, end_y))
+
+
+    def decode_action(self, action_index):
+        # 确保合法移动列表是最新的
+        self.update_legal_moves()
+
+        # 根据动作索引解码为具体的移动
+        if action_index < len(self.legal_moves):
+            return self.legal_moves[action_index]
+        else:
+            # 如果索引超出范围，返回一个无效的移动
+            # print('decode_action: 索引超出范围')
+            return None, None, None, None
+    
+    
+    def execute_action(self, action):
+        # 解码动作以获取起始位置和目标位置
+        # 这里的解码逻辑取决于你是如何编码你的动作的
+        print('execute_action:', action)
+        start_x, start_y, end_x, end_y = self.decode_action(action)
+
+        print("decode_action:", start_x, start_y, end_x, end_y)
+        # 找到起始位置的棋子
+        piece = self.get_piece_at((start_x, start_y))
+        if piece:
+            # 移动棋子到目标位置，并处理任何可能的捕获
+            self.move_piece(piece, end_x, end_y)
+        else:
+            print("无法执行动作：起始位置没有棋子。")
