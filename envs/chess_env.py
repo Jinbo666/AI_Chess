@@ -46,10 +46,16 @@ class ChineseChessEnv(gym.Env):
         # print('step is called!')
         info = {}  # 可以包含额外的调试信息
         # 执行动作，更新状态
-        valid_action = self._take_action(action)
+        start_x, start_y, end_x, end_y = self._take_action(action)
+
         done = self._check_done()
-        if not valid_action:
+        if not start_x and not start_y and not end_x and not end_y:
             return self.state, -50, done, info
+        
+        # print('self.state:', self.state)
+        # 更新环境状态
+        self.state = self._update_state_after_action(start_x, start_y, end_x, end_y)
+
         if done:
             return self.reset(), 0, done, info
         
@@ -62,6 +68,39 @@ class ChineseChessEnv(gym.Env):
             return self.reset(), 0, done, info
         return self.state, reward, done, info
 
+    def _update_state_after_action(self, start_x, start_y, end_x, end_y):
+        # 首先，找到开始位置的棋子类型和颜色
+        piece_index = np.argmax(self.state[start_y, start_x])
+        [piece_color, piece_type] = self._index_to_piece_type(piece_index)
+
+        # 清除开始位置的棋子信息
+        self.state[start_y, start_x, :] = 0
+
+        # 如果结束位置有棋子（即吃子），也清除结束位置的棋子信息
+        # 注意：这个示例不区分吃子或普通移动，因为状态更新的关键在于最终的棋盘布局
+        self.state[end_y, end_x, :] = 0
+
+        # 将棋子移动到新的位置
+        new_piece_index = self._piece_type_to_index(piece_color, piece_type)
+        self.state[end_y, end_x, new_piece_index] = 1
+
+        # 返回更新后的状态
+        return self.state
+
+    def _index_to_piece_type(self, index):
+        # 找到索引对应的棋子类型和颜色
+        for piece_type, idx in piece_type_to_index.items():
+            if idx == index:
+                # 假设piece_type的格式是"颜色类型"，如"红车"
+                return [piece_type[:1], piece_type[1:]]  # 分割字符串
+        # 如果未找到，可以抛出异常或返回一个明确的错误值
+        raise ValueError(f"Index {index} not found in piece_type_to_index mapping.")
+
+
+    def _piece_type_to_index(self, color, type):
+        # 这个方法根据棋子的颜色和类型返回对应的索引
+        return piece_type_to_index[color + type]
+    
     def render(self, mode='human', close=False):
         # print('ChineseChessEnv render is called:', mode)
         # 可视化当前环境状态
@@ -135,7 +174,7 @@ class ChineseChessEnv(gym.Env):
         moving_piece = self.board.get_piece_at((start_x, start_y))
         if moving_piece is None or moving_piece.color != self.board.current_player:
             # print('无效行动或尝试移动对方棋子', self.current_player, start_x, start_y, end_x, end_y)
-            return False  # 无效行动或尝试移动对方棋子
+            return None, None, None, None  # 无效行动或尝试移动对方棋子
         
         # 执行动作：移动棋子
         # 这需要你的Board类有方法来支持移动棋子
@@ -143,7 +182,7 @@ class ChineseChessEnv(gym.Env):
         if not move_successful:
             # 如果移动失败（例如，试图吃掉己方棋子），也可以返回一个负奖励
             # print('移动失败（例如，试图吃掉己方棋子）')
-            return False
+            return None, None, None, None
         
         captured_piece = self.board.last_move_captured_piece()
         if captured_piece:
@@ -155,7 +194,7 @@ class ChineseChessEnv(gym.Env):
         # self.current_player = 'black' if self.current_player == 'red' else 'red'
         self.board.current_player = 'black' if self.board.current_player == 'red' else 'red'
 
-        return True
+        return start_x, start_y, end_x, end_y
 
     def _get_reward(self):
         # 基于游戏进展情况计算奖励
