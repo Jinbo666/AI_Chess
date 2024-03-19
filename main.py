@@ -28,7 +28,7 @@ model = PPO.load("ppo_chinese_chess.zip")
 
 # 初始化环境
 print('ChineseChessEnv...')
-env = ChineseChessEnv(board)
+env = ChineseChessEnv(board, render_delay=0.5)
 
 
 selected_piece = None  # 选中的棋子

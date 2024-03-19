@@ -698,16 +698,21 @@ class Board:
 
 
     def decode_action(self, action_index):
-        # 确保合法移动列表是最新的
-        self.update_legal_moves()
+        board_width = 9
+        board_height = 10
+        total_positions = board_width * board_height
 
-        # 根据动作索引解码为具体的移动
-        if action_index < len(self.legal_moves):
-            return self.legal_moves[action_index]
-        else:
-            # 如果索引超出范围，返回一个无效的移动
-            # print('decode_action: 索引超出范围')
-            return None, None, None, None
+        start_pos = action_index // total_positions
+        end_pos = action_index % total_positions
+
+        start_x = start_pos % board_width
+        start_y = start_pos // board_width
+        end_x = end_pos % board_width
+        end_y = end_pos // board_height
+
+        return start_x, start_y, end_x, end_y
+
+
     
     
     def execute_action(self, action):

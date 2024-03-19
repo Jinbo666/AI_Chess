@@ -1,30 +1,33 @@
 import gym
 from gym import spaces
 import numpy as np
+import time
 from game.util.const import *
 from game.board import Board
 
 class ChineseChessEnv(gym.Env):
     metadata = {'render.modes': ['human']}
     
-    def __init__(self, board):
+    def __init__(self, board, render_delay=0):
         super(ChineseChessEnv, self).__init__()
         # 定义动作空间和观察空间        self.state = None  # 初始化状态
         self.board = board if board is not None else Board()  #Board()  # 创建棋盘实例
         # self.current_player = 'red'  # 假设红方先行
+        self.render_delay = render_delay
 
         self.no_capture_step_limit = 50  # 设置无吃子步数限制，这里以50步为例
         self.no_capture_step_count = 0  # 用于记录自上次吃子以来的步数
 
         self.legal_moves = self.compute_legal_moves()
         
-        if self.legal_moves and len(self.legal_moves) > 0:
-            self.action_space = spaces.Discrete(len(self.legal_moves))
-        else:
-            self.action_space = spaces.Discrete(0)
-        # self.action_space = spaces.Discrete(len(self.legal_moves))#(90*90)  # 假设有90*90种可能的动作
+        # if self.legal_moves and len(self.legal_moves) > 0:
+        #     self.action_space = spaces.Discrete(len(self.legal_moves))
+        # else:
+        #     self.action_space = spaces.Discrete(0)
+        self.action_space = spaces.Discrete(90*90)  # 假设有90*90种可能的动作
+        self.action_mask = np.zeros(self.action_space.n, dtype=np.bool)  # 初始化动作掩码
         self.observation_space = spaces.Box(low=0, high=1, shape=(10, 9, 14), dtype=np.float32)  # 示例观察空间
-
+        self.num_episodes = 0
 
     def seed(self, seed=None):
         pass
@@ -39,7 +42,7 @@ class ChineseChessEnv(gym.Env):
         self.state = self._get_initial_state()
         self.board.setup_pieces()  # 确保棋盘状态也被重置
         # 动态更新合法动作列表
-        self.update_legal_moves()
+        self.update_legal_moves_and_action_mask()
         return self.state
 
     def step(self, action):
@@ -47,6 +50,7 @@ class ChineseChessEnv(gym.Env):
         info = {}  # 可以包含额外的调试信息
         # 执行动作，更新状态
         start_x, start_y, end_x, end_y = self._take_action(action)
+        # print(start_x, start_y, end_x, end_y)
 
         done = self._check_done()
         if not start_x and not start_y and not end_x and not end_y:
@@ -57,16 +61,52 @@ class ChineseChessEnv(gym.Env):
         self.state = self._update_state_after_action(start_x, start_y, end_x, end_y)
 
         if done:
+            self.num_episodes += 1
+            print('self.num_episodes:', self.num_episodes)
             return self.reset(), 0, done, info
         
 
         # 动态更新合法动作列表
-        self.update_legal_moves()
+        self.update_legal_moves_and_action_mask()
+
+        
+        # 根据render_delay停顿一下
+        if self.render_delay > 0:
+            time.sleep(self.render_delay)
 
         reward = self._get_reward()
         if done:
             return self.reset(), 0, done, info
         return self.state, reward, done, info
+    
+    def action_to_index(self, start_x, start_y, end_x, end_y):
+        # 假设棋盘大小为9x10
+        board_width = 9
+        start_pos = start_y * board_width + start_x
+        end_pos = end_y * board_width + end_x
+        return start_pos * (board_width * 10) + end_pos
+    
+    def index_to_action(self, index):
+        board_width = 9
+        total_positions = board_width * 10
+        start_pos = index // total_positions
+        end_pos = index % total_positions
+        start_x = start_pos % board_width
+        start_y = start_pos // board_width
+        end_x = end_pos % board_width
+        end_y = end_pos // board_width
+        return start_x, start_y, end_x, end_y
+
+    def generate_action_mask(self):
+        legal_moves = self.compute_legal_moves()
+        # 初始化一个全为False的掩码
+        mask = np.zeros(self.action_space.n, dtype=np.bool)
+        # 根据当前状态更新掩码，这里仅为示例
+        # 假设self.legal_moves包含所有合法动作的编码索引
+        for move in legal_moves:
+            index = self.action_to_index(*move)
+            mask[index] = True
+        return mask
 
     def _update_state_after_action(self, start_x, start_y, end_x, end_y):
         # 首先，找到开始位置的棋子类型和颜色
@@ -138,16 +178,16 @@ class ChineseChessEnv(gym.Env):
         # print(len(legal_moves))
         return legal_moves
     
-    def update_legal_moves(self):
-        # 根据当前棋盘状态动态更新合法动作列表
-        self.legal_moves = self.compute_legal_moves()
-        # if len(self.legal_moves) < 1:
-        #     self.reset()
-        # 也可能需要更新动作空间的大小
-        if self.legal_moves and len(self.legal_moves) > 0:
-            self.action_space = spaces.Discrete(len(self.legal_moves))
-        else:
-            self.action_space = spaces.Discrete(0)
+    def update_legal_moves_and_action_mask(self):
+        # 重置动作掩码
+        self.action_mask.fill(False)
+        
+        # 根据当前状态下所有合法动作更新动作掩码
+        legal_moves = self.compute_legal_moves()  # 假设这个方法返回所有合法动作的列表
+        for move in legal_moves:
+            action_index = self.action_to_index(*move)  # 将动作转换为动作空间中的索引
+            self.action_mask[action_index] = True  # 标记为合法动作
+
 
     def _get_initial_state(self):
         # 初始化状态
@@ -228,17 +268,17 @@ class ChineseChessEnv(gym.Env):
         # 根据被吃掉的棋子类型赋予奖励值
         # 这里你可以根据棋子的重要性给予不同的奖励值
         if piece.name in ['将', '帅']:
-            return 100
+            return 200
         elif piece.name == '车' :
-            return 50
+            return 100
         elif piece.name in ['马', '炮']:
-            return 25
+            return 50
         elif piece.name in ['象', '相', '士', '仕']:
-            return 10
+            return 20
         elif piece.name == '兵':
-            return 5
+            return 10
         # 添加其他棋子类型的奖励逻辑
-        return 1  # 默认奖励值
+        return 0  # 默认奖励值
 
     def _check_done(self):
         # 检查是否有一方胜利
