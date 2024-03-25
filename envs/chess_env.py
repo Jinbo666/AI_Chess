@@ -4,9 +4,14 @@ import numpy as np
 import time
 from game.util.const import *
 from game.board import Board
+# from gymnasium.spaces import Discrete
+
+
 
 class ChineseChessEnv(gym.Env):
     metadata = {'render.modes': ['human']}
+
+    # num_episodes = 0
     
     def __init__(self, board, render_delay=0):
         super(ChineseChessEnv, self).__init__()
@@ -25,9 +30,12 @@ class ChineseChessEnv(gym.Env):
         # else:
         #     self.action_space = spaces.Discrete(0)
         self.action_space = spaces.Discrete(90*90)  # 假设有90*90种可能的动作
-        self.action_mask = np.zeros(self.action_space.n, dtype=np.bool)  # 初始化动作掩码
+        self.action_mask = np.zeros(self.action_space.n, dtype=np.bool_)  # 初始化动作掩码
         self.observation_space = spaces.Box(low=0, high=1, shape=(10, 9, 14), dtype=np.float32)  # 示例观察空间
-        self.num_episodes = 0
+
+
+        self.action_history = []
+        self.action_history_N = 5
 
     def seed(self, seed=None):
         pass
@@ -43,38 +51,72 @@ class ChineseChessEnv(gym.Env):
         self.board.setup_pieces()  # 确保棋盘状态也被重置
         # 动态更新合法动作列表
         self.update_legal_moves_and_action_mask()
-        return self.state
+        info = {'action_mask': self.action_mask}
+        print('reset:', self.action_mask.shape)
+        return self.state#, info
+
+    def update_reward_with_repetition_penalty(self, reward, current_action, repetition_penalty=0.1):
+        # 假设actions是一个列表或数组，包含一系列动作
+        # unique_actions, counts = np.unique(actions, return_counts=True)
+        # prob_actions = counts / counts.sum()
+        # entropy = -np.sum(prob_actions * np.log(prob_actions + 1e-6))  # 计算熵
+        # entropy_bonus = entropy * entropy_bonus_weight
+        #
+        # # 将熵奖励加到原始奖励上
+        # updated_rewards = rewards + entropy_bonus
+        # print('_get_reward:', rewards, 'entropy_bonus:', round(entropy_bonus, 3), 'updated_rewards:', round(updated_rewards, 3))
+        # 检查是否与上一步动作的结束位置相同
+        if len(self.action_history) >= 2:  # 确保至少有两步动作记录
+            last_action = self.action_history[-2]  # 获取上一步动作
+            if current_action[:2] == last_action[2:]:
+                # 如果当前动作的起始位置与上一动作的结束位置相同，则应用惩罚
+                reward -= repetition_penalty
+        return reward
 
     def step(self, action):
-        # print('step is called!')
+        # print('step is called!', self.no_capture_step_count)
         info = {}  # 可以包含额外的调试信息
         # 执行动作，更新状态
         start_x, start_y, end_x, end_y = self._take_action(action)
         # print(start_x, start_y, end_x, end_y)
 
+        # 记录动作到历史列表中
+        current_action = (start_x, start_y, end_x, end_y)
+        self.action_history.append(current_action)
+
+        if len(self.action_history) > self.action_history_N:  # 保持动作历史的长度为N
+            self.action_history.pop(0)
+
         done = self._check_done()
         if not start_x and not start_y and not end_x and not end_y:
-            return self.state, -50, done, info
+            info = {'illegal_action': True}
+            return self.state, -1, done, info
         
         # print('self.state:', self.state)
         # 更新环境状态
         self.state = self._update_state_after_action(start_x, start_y, end_x, end_y)
 
+        # 基于动作历史计算熵
+        reward = self.update_reward_with_repetition_penalty(self._get_reward(), current_action, 0.1)
+
+
         if done:
-            self.num_episodes += 1
-            print('self.num_episodes:', self.num_episodes)
-            return self.reset(), 0, done, info
+            CONST.num_episodes += 1
+            print('================================================================================')
+            print('CONST.num_episodes:', CONST.num_episodes)
+            print('================================================================================')
+            return self.reset(), reward, done, info
         
 
         # 动态更新合法动作列表
         self.update_legal_moves_and_action_mask()
-
+        # print('step:', self.action_mask.shape)
+        info = {'action_mask': self.action_mask}
         
         # 根据render_delay停顿一下
         if self.render_delay > 0:
             time.sleep(self.render_delay)
 
-        reward = self._get_reward()
         if done:
             return self.reset(), 0, done, info
         return self.state, reward, done, info
@@ -216,6 +258,12 @@ class ChineseChessEnv(gym.Env):
             # print('无效行动或尝试移动对方棋子', self.current_player, start_x, start_y, end_x, end_y)
             return None, None, None, None  # 无效行动或尝试移动对方棋子
         
+        
+        # 检查移动是否合法（根据你的棋盘规则）
+        if not self.board.is_valid_move(moving_piece, end_x, end_y):
+            # print('不合法的移动')
+            return None, None, None, None  # 不合法的移动
+        
         # 执行动作：移动棋子
         # 这需要你的Board类有方法来支持移动棋子
         move_successful = self.board.move_piece(moving_piece, end_x, end_y)
@@ -247,7 +295,7 @@ class ChineseChessEnv(gym.Env):
         
         has_won = self.board.check_for_victory()
 
-        reward = 0
+        reward = 1
 
         if captured_piece:
             # 根据被吃掉的棋子类型赋予不同的奖励值
@@ -255,11 +303,11 @@ class ChineseChessEnv(gym.Env):
 
         if is_check:
             # 如果将军，获得奖励
-            reward += 2  # 示例：将军获得2分奖励
+            reward += 150  # 示例：将军获得2分奖励
 
         if has_won:
             # 如果赢得比赛，获得更大的奖励
-            reward += 100  # 示例：赢得比赛获得100分奖励
+            reward += 1000  # 示例：赢得比赛获得100分奖励
 
         return reward
 
@@ -269,7 +317,7 @@ class ChineseChessEnv(gym.Env):
         # 这里你可以根据棋子的重要性给予不同的奖励值
         if piece.name in ['将', '帅']:
             return 200
-        elif piece.name == '车' :
+        elif piece.name == '车':
             return 100
         elif piece.name in ['马', '炮']:
             return 50
@@ -278,7 +326,7 @@ class ChineseChessEnv(gym.Env):
         elif piece.name == '兵':
             return 10
         # 添加其他棋子类型的奖励逻辑
-        return 0  # 默认奖励值
+        return 1  # 默认奖励值
 
     def _check_done(self):
         # 检查是否有一方胜利
@@ -290,6 +338,7 @@ class ChineseChessEnv(gym.Env):
 
         # 检查游戏是否结束...
         # 如果无吃子步数达到限制，判定为和棋
+        # print('self.no_capture_step_count:', self.no_capture_step_count)
         if self.no_capture_step_count >= self.no_capture_step_limit:
             return True
 

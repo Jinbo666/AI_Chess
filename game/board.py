@@ -1,4 +1,5 @@
 # import pygame
+import collections
 from .pieces import Piece
 from game.util.const import *
 
@@ -67,17 +68,36 @@ class Board:
         # 假设self.pieces以某种方式存储了棋子的位置和对象
         (start_x, start_y) = piece.position
         moving_piece = self.pieces.get((start_x, start_y))
+        color = '黑'
+        if piece.color=='red':
+            color = '红'
+        print("episode:", CONST.num_episodes, color+piece.name, start_x, start_y, target_x, target_y)
         # 检查目标位置是否为己方棋子
         target_piece = self.get_piece_at((target_x, target_y))
         if target_piece and target_piece.color == piece.color:
-            # print("不能吃掉己方棋子。")
+            print("不能吃掉己方棋子。")
             return False  # 阻止移动
+        if start_x == target_x and start_y == target_y:
+            print("不能吃掉自己。")
+            return False
 
         # 如果目标位置有对方棋子，则吃掉它, 则视为被捕获
         if target_piece and target_piece.color != piece.color:
             self.last_captured_piece = target_piece
-            # print(f"吃掉对方的{target_piece.name}")
+            print(f"episode: {CONST.num_episodes}, 吃掉对方的{target_piece.name}！！！")
+
             self.remove_piece(target_piece)  # 假设有一个方法来处理棋子的移除
+
+
+            # 打印对方和己方 给剩下什么棋子
+            color2pieces = collections.defaultdict(list)
+            for _, piece in self.pieces.items():
+                color2pieces[piece.color].append(piece.name)
+            for color in color2pieces:
+                c = '黑'
+                if color == 'red':
+                    c = '红'
+                print(c, ':', len(color2pieces[color]),  color2pieces[color])
         else:
             self.last_captured_piece = None
 

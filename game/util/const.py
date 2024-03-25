@@ -74,3 +74,6 @@ piece_type_to_index = {
     '红帅': 10, '黑将': 11,
     '红兵': 12, '黑卒': 13
 }
+
+class CONST():
+    num_episodes = 0
