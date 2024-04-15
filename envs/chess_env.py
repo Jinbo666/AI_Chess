@@ -4,7 +4,6 @@ import numpy as np
 import time
 from game.util.const import *
 from game.board import Board
-# from gymnasium.spaces import Discrete
 
 
 
@@ -24,11 +23,7 @@ class ChineseChessEnv(gym.Env):
         self.no_capture_step_count = 0  # 用于记录自上次吃子以来的步数
 
         self.legal_moves = self.compute_legal_moves()
-        
-        # if self.legal_moves and len(self.legal_moves) > 0:
-        #     self.action_space = spaces.Discrete(len(self.legal_moves))
-        # else:
-        #     self.action_space = spaces.Discrete(0)
+
         self.action_space = spaces.Discrete(90*90)  # 假设有90*90种可能的动作
         self.action_mask = np.zeros(self.action_space.n, dtype=np.bool_)  # 初始化动作掩码
         self.observation_space = spaces.Box(low=0, high=1, shape=(10, 9, 14), dtype=np.float32)  # 示例观察空间
@@ -53,18 +48,11 @@ class ChineseChessEnv(gym.Env):
         self.update_legal_moves_and_action_mask()
         info = {'action_mask': self.action_mask}
         print('reset:', self.action_mask.shape)
-        return self.state#, info
+        print('reset, return state!!!', self.state)
+        print(self.state.shape)
+        return self.state #, info
 
     def update_reward_with_repetition_penalty(self, reward, current_action, repetition_penalty=0.1):
-        # 假设actions是一个列表或数组，包含一系列动作
-        # unique_actions, counts = np.unique(actions, return_counts=True)
-        # prob_actions = counts / counts.sum()
-        # entropy = -np.sum(prob_actions * np.log(prob_actions + 1e-6))  # 计算熵
-        # entropy_bonus = entropy * entropy_bonus_weight
-        #
-        # # 将熵奖励加到原始奖励上
-        # updated_rewards = rewards + entropy_bonus
-        # print('_get_reward:', rewards, 'entropy_bonus:', round(entropy_bonus, 3), 'updated_rewards:', round(updated_rewards, 3))
         # 检查是否与上一步动作的结束位置相同
         if len(self.action_history) >= 2:  # 确保至少有两步动作记录
             last_action = self.action_history[-2]  # 获取上一步动作
@@ -74,11 +62,11 @@ class ChineseChessEnv(gym.Env):
         return reward
 
     def step(self, action):
-        # print('step is called!', self.no_capture_step_count)
+        print('ChineseChessEnv, step, action:', action)
         info = {}  # 可以包含额外的调试信息
         # 执行动作，更新状态
         start_x, start_y, end_x, end_y = self._take_action(action)
-        # print(start_x, start_y, end_x, end_y)
+        print('start_x, start_y, end_x, end_y:', start_x, start_y, end_x, end_y)
 
         # 记录动作到历史列表中
         current_action = (start_x, start_y, end_x, end_y)
@@ -182,13 +170,7 @@ class ChineseChessEnv(gym.Env):
     def _piece_type_to_index(self, color, type):
         # 这个方法根据棋子的颜色和类型返回对应的索引
         return piece_type_to_index[color + type]
-    
-    def render(self, mode='human', close=False):
-        # print('ChineseChessEnv render is called:', mode)
-        # 可视化当前环境状态
-        if mode == 'human':
-            self.board.render_human()
-    
+
     
     def get_observation(self):
         # 创建一个10x9x14的数组来表示棋盘状态，初始化为0
@@ -340,6 +322,7 @@ class ChineseChessEnv(gym.Env):
         # 如果无吃子步数达到限制，判定为和棋
         # print('self.no_capture_step_count:', self.no_capture_step_count)
         if self.no_capture_step_count >= self.no_capture_step_limit:
+            print(f"{self.no_capture_step_limit}步以内没有吃子，这局结束！！！")
             return True
 
         # 检查当前玩家是否有合法动作可执行
@@ -350,3 +333,6 @@ class ChineseChessEnv(gym.Env):
 
         return False
 
+    def render(self, mode='human', close=False):
+        # if mode == 'human':
+        self.board.render_human()

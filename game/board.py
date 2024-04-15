@@ -1,4 +1,6 @@
 # import pygame
+import numpy as np
+
 import collections
 from .pieces import Piece
 from game.util.const import *
@@ -71,20 +73,20 @@ class Board:
         color = '黑'
         if piece.color=='red':
             color = '红'
-        print("episode:", CONST.num_episodes, color+piece.name, start_x, start_y, target_x, target_y)
+        print(f"episode: {CONST.num_episodes}, {color}{piece.name}, {start_x} {start_y} => {target_x} {target_y}")
         # 检查目标位置是否为己方棋子
         target_piece = self.get_piece_at((target_x, target_y))
         if target_piece and target_piece.color == piece.color:
-            print("不能吃掉己方棋子。")
+            print(f"episode: {CONST.num_episodes}, {color}{piece.name}, {start_x} {start_y} => {target_x} {target_y}, 不能吃掉己方棋子。")
             return False  # 阻止移动
         if start_x == target_x and start_y == target_y:
-            print("不能吃掉自己。")
+            print(f"episode: {CONST.num_episodes}, {color}{piece.name}, {start_x} {start_y} => {target_x} {target_y}, 不能吃掉自己。")
             return False
 
         # 如果目标位置有对方棋子，则吃掉它, 则视为被捕获
         if target_piece and target_piece.color != piece.color:
             self.last_captured_piece = target_piece
-            print(f"episode: {CONST.num_episodes}, 吃掉对方的{target_piece.name}！！！")
+            print(f"episode: {CONST.num_episodes}, {color}{piece.name}, {start_x} {start_y} => {target_x} {target_y}, 吃掉对方的{target_piece.name}！！！")
 
             self.remove_piece(target_piece)  # 假设有一个方法来处理棋子的移除
 
@@ -259,30 +261,23 @@ class Board:
                 
                 # 如果移动合法，则添加到可能的移动位置
                 possible_moves.append((target_x, target_y))
-        
-        if piece.name in ["将", "帅"]:
-            # 将/帅的移动可以是4个基本方向：上，下，左，右
-            moves = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-            for dx, dy in moves:
-                x, y = piece.position
-                target_x = x + dx
-                target_y = y + dy
-                
-                # 确保目标位置在九宫内
-                if piece.color == "red":
-                    if not (3 <= target_x <= 5 and 7 <= target_y <= 9):
-                        continue
-                else:  # 黑方帅的九宫格范围
-                    if not (3 <= target_x <= 5 and 0 <= target_y <= 2):
-                        continue
-                        
-                target_piece = self.get_piece_at((target_x, target_y))
-                # 检查目标位置是否被己方棋子占据
-                if target_piece and target_piece.color == piece.color:
-                    continue
-                        
-                # 添加到可能的移动位置
-                possible_moves.append((target_x, target_y))
+        if piece.name in ["兵", "卒"]:
+            x, y = piece.position
+            forward = -1 if piece.color == 'red' else 1  # 红方向上移动，黑方向下移动
+
+            # 前进
+            if 0 <= y + forward < 10:
+                if not self.get_piece_at((x, y + forward)):
+                    possible_moves.append((x, y + forward))
+
+            # 过河后的左右移动
+            if (piece.color == 'red' and y < 5) or (piece.color == 'black' and y >= 5):
+                # 左移动
+                if x > 0 and not self.get_piece_at((x - 1, y)):
+                    possible_moves.append((x - 1, y))
+                # 右移动
+                if x < 8 and not self.get_piece_at((x + 1, y)):
+                    possible_moves.append((x + 1, y))
 
         return possible_moves
     
@@ -318,7 +313,7 @@ class Board:
 
     def is_valid_move(self, piece, target_x, target_y):
         # 基本的移动规则验证逻辑
-        if piece.name == "兵" or piece.name == "卒":
+        if piece.name in ["兵", "卒"]:
             return self.validate_soldier_move(piece, target_x, target_y)
         # 添加其他棋子的验证逻辑
         
@@ -716,7 +711,6 @@ class Board:
                     if (start_x, start_y, end_x, end_y) not in self.legal_moves:
                         self.legal_moves.append((start_x, start_y, end_x, end_y))
 
-
     def decode_action(self, action_index):
         board_width = 9
         board_height = 10
@@ -728,10 +722,9 @@ class Board:
         start_x = start_pos % board_width
         start_y = start_pos // board_width
         end_x = end_pos % board_width
-        end_y = end_pos // board_height
+        end_y = end_pos // board_width  # 此处修正为 board_width 以保持一致
 
         return start_x, start_y, end_x, end_y
-
 
     
     
@@ -749,3 +742,90 @@ class Board:
             self.move_piece(piece, end_x, end_y)
         else:
             print("无法执行动作：起始位置没有棋子。")
+
+
+    # ============== Support MCTS: =============== #
+    def simulate_move(self, state, decoded_action):
+        """模拟在给定状态执行动作后的新状态。"""
+        # 此函数需要创建状态的深拷贝，以避免更改原始状态
+        # print('state:', state)
+        # print('decoded_action:', decoded_action)
+        simulated_state = np.copy(state)
+        # simulated_state = [row[:] for row in state]
+        # print('simulated_state:', simulated_state)
+        # print(simulated_state.shape)
+        start_x, start_y, end_x, end_y = decoded_action  #self.decode_action(action)
+        if len(simulated_state) == 1: # bug fix
+            simulated_state = simulated_state[0]
+        # print("start_y, start_x:", start_y, start_x, len(simulated_state), len(simulated_state[0]))
+        piece = simulated_state[start_y][start_x]
+        if not np.any(piece):
+            return simulated_state
+
+        # 执行移动，更新状态等后续步骤
+        # 移动棋子：先清空起始位置
+        simulated_state[start_y, start_x] = np.zeros_like(piece)
+        # 将棋子放置到新位置
+        simulated_state[end_y, end_x] = piece
+
+        return simulated_state
+
+    def is_terminal(self, state):
+        """判断状态是否是游戏结束的状态"""
+        # 假设index 10是红帅，11是黑将
+        red_king_index = 10
+        black_king_index = 11
+
+        # 遍历棋盘检查是否存在红帅和黑将，假设红帅和黑将都在第一个数组中
+        red_king_exists = np.any(state[0][:, red_king_index] == 1)
+        black_king_exists = np.any(state[0][:, black_king_index] == 1)
+
+        # 如果任一方的将/帅不在棋盘上，则游戏结束
+        return not red_king_exists or not black_king_exists
+
+    def get_result(self, state, player_color):
+        """获取游戏结束时的结果，假设1为胜利，0为失败，0.5为平局"""
+        # 假设index 10是红帅，11是黑将
+        red_king_index = 10
+        black_king_index = 11
+
+        # 检查棋盘上是否存在红帅和黑将
+        red_king_exists = np.any(state[0][:, red_king_index] == 1)
+        black_king_exists = np.any(state[0][:, black_king_index] == 1)
+
+        # 根据当前玩家颜色和对方王的存在情况判断胜负
+        if player_color == 'red':
+            if not black_king_exists:
+                return 1  # 红方胜利
+            elif not red_king_exists:
+                return 0  # 红方失败
+        elif player_color == 'black':
+            if not red_king_exists:
+                return 1  # 黑方胜利
+            elif not black_king_exists:
+                return 0  # 黑方失败
+
+        return 0.5  # 平局
+
+    def get_legal_moves(self, state, player_color):
+        """根据当前状态和玩家颜色获取所有合法移动"""
+        legal_moves = []
+        legal_moves_whole = []
+        # for y, row in enumerate(state):
+        #     for x, piece in enumerate(row):
+        #         if piece and piece.color == player_color:
+        #             moves = self.get_all_possible_moves(piece)
+        #             legal_moves.extend(moves)
+
+        for piece in self.pieces.values():
+            if piece and piece.color == self.current_player:  # 这里检查棋子颜色是否匹配当前行动
+                moves = self.get_all_possible_moves(piece)
+                legal_moves.extend(moves)
+                # print(piece.color + piece.name, 'piece.position:', piece.position, "moves:", moves)
+                for move in moves:
+                    # print("[piece.position, moves[0]]:", [piece.position[0], piece.position[1], move[0], move[1]])
+                    legal_moves_whole.append([piece.position[0], piece.position[1], move[0], move[1]])
+        # print("legal_moves_whole:")
+        # print(legal_moves_whole)
+
+        return legal_moves_whole
