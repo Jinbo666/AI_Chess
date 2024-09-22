@@ -7,8 +7,8 @@ import time
 import logging
 
 MAX_DEPTH = 20  # 20
-MAX_CHILDREN = 16  # 5
-MAX_ITERATION = 1000
+MAX_CHILDREN = 5  # 5
+MAX_ITERATION = 10 # 1000
 C = 1.4  # 1.4
 
 class MCTS_Node:
@@ -82,16 +82,24 @@ class MCTS_AI:
                 print(f"\nSimulation {iteration} start")
 
             # Selection
+            print('>>>>>>>>Selection start')
             node, state = self.selection(node, state)
+            print('<<<<<<<<Selection done')
 
             # Expansion
+            print('>>>>>>>>Expansion start')
             node, state = self.expansion(node, state)
+            print('<<<<<<<<Expansion done')
 
             # Simulation
+            print('>>>>>>>>Simulation start')
             result = self.simulation(state)
+            print('<<<<<<<<Simulation done')
 
             # Backpropagation
+            print('>>>>>>>>Backpropagation start')
             self.backpropagation(node, result)
+            print('<<<<<<<<Backpropagation done')
 
             state.is_simulation = False  # 模拟结束
 
@@ -107,7 +115,6 @@ class MCTS_AI:
     # 以下需要实现 selection、expansion、simulation、backpropagation 方法
     def selection(self, node, state):
         # 递归地选择子节点，直到到达一个未完全展开的节点
-        print("Selected start")
         while node.untried_actions == [] and node.children != []:
             # print('uct_select')
             node = self.uct_select(node)
@@ -116,7 +123,6 @@ class MCTS_AI:
             state.move_piece(piece, node.action[1][0], node.action[1][1])
             if self.debug:
                 print(f"Selected node at depth {node.depth()}, action: {node.action}, visits: {node.visits}, wins: {node.wins}")
-        print("Selected done")
         return node, state
 
     def uct_select(self, node):
@@ -125,9 +131,13 @@ class MCTS_AI:
         best_score = -float('inf')
         best_child = None
         for child in node.children:
+            # 防止除以零错误，如果 child.visits 为 0，设置一个非常小的数
+            if child.visits == 0:
+                exploitation = 0
+            else:
+                exploitation = child.wins / child.visits
 
-            exploitation = child.wins / child.visits
-            exploration = c * math.sqrt(math.log(node.visits) / child.visits)
+            exploration = c * math.sqrt(math.log(node.visits) / (child.visits + 1e-6))
             aggressiveness = child.aggressiveness  # 进攻性因子
 
             # uct_score = (child.wins / child.visits) + \
@@ -143,30 +153,52 @@ class MCTS_AI:
         return best_child
 
     def expansion(self, node, state):
-        print("Expansion start")
-        max_children = MAX_CHILDREN  # 限制子节点数量
         if node.untried_actions:
-            # 如果未尝试动作列表长度超过 max_children，只保留前 max_children 个动作
-            if len(node.untried_actions) > max_children:
-                node.untried_actions = node.untried_actions[:max_children]
-            # 从未尝试的动作中选择一个动作进行扩展
-            action = node.untried_actions.pop(0)  # 选择优先级最高的动作
+            print('expansion node.untried_actions:', node.untried_actions)
+            # 随机选择 MAX_CHILDREN 个动作进行扩展，增加探索的多样性
+            actions_to_try = random.sample(node.untried_actions, min(len(node.untried_actions), MAX_CHILDREN))
+            print('expansion actions_to_try:', actions_to_try)
+            new_nodes = []
+            moved_pieces_positions = set()  # 用于跟踪已经移动的棋子位置
 
-            # 在模拟的状态中执行动作
-            piece = state.get_piece_at(action[0])
-            move_successful = state.move_piece(piece, action[1][0], action[1][1])
-            if not move_successful:
-                # 如果移动不成功，跳过此动作
-                return node, state
+            for action in actions_to_try:
+                start_position = action[0]
 
-            # 创建新节点
-            child_node = MCTS_Node(state=deepcopy(state), parent=node, action=action)
-            node.children.append(child_node)
-            node = child_node
+                # 检查起始位置是否已经被移动过
+                if start_position in moved_pieces_positions:
+                    print(f"Expansion Skipping action {action} because piece at {start_position} has already moved.")
+                    continue
 
-            if self.debug:
-                print(f"Expanded new node with action: {action}")
-        print("Expansion done!")
+                # 从未尝试动作中移除
+                node.untried_actions.remove(action)
+
+                # 获取棋子并确保棋子存在
+                piece = state.get_piece_at(start_position)
+                if piece is None:
+                    print(f"Expansion Warning: No piece found at {start_position}. Skipping this action.")
+                    continue  # 如果该位置没有棋子，跳过此动作
+
+                # 执行动作，生成新的游戏状态
+                move_successful = state.move_piece(piece, action[1][0], action[1][1])
+                if not move_successful:
+                    print(f"Expansion Move not successful for action {action}.")
+                    continue  # 如果移动不成功，跳过此动作
+
+                # 记录这个动作的起始位置，以避免后续动作再移动同一个位置
+                moved_pieces_positions.add(start_position)
+
+                # 创建新节点并添加到子节点列表中
+                child_node = MCTS_Node(state=deepcopy(state), parent=node, action=action)
+                node.children.append(child_node)
+
+                # 收集新扩展的子节点
+                new_nodes.append(child_node)
+
+            # 返回最后一个扩展的子节点和更新后的状态
+            if new_nodes:
+                return new_nodes[-1], state  # 返回最后一个扩展的子节点
+            else:
+                return node, state  # 如果没有扩展任何节点，返回当前节点
         return node, state
 
     def simulation(self, state):
@@ -233,43 +265,54 @@ class MCTS_AI:
             return random.choice(normal_actions)
 
     def evaluate_state(self, state):
+        """评估当前游戏状态，返回一个数值表示对当前玩家的有利程度。"""
+        # 定义每种棋子的基础价值
         piece_values = {
             'che': 9,
-            'ma': 4.5,
-            'xiang': 2,
+            'ma': 5,
+            'xiang': 3,
             'shi': 2,
-            'jiang': 10000,
-            'pao': 4.5,
+            'jiang': 1000,
+            'pao': 5,
             'bing': 1
         }
+
+        # 进攻性奖励因子，可以根据棋子越靠近对方阵营给予更高奖励
+        attack_bonus = {
+            'red': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],  # y坐标为0-9，越靠近0分数越高
+            'black': [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]  # y坐标为0-9，越靠近9分数越高
+        }
+
         my_score = 0
         opponent_score = 0
+        my_piece_count = 0
+        opponent_piece_count = 0
+
         for piece in state.pieces.values():
-            value = piece_values.get(piece.type, 0)
-            # 考虑棋子的位置价值，例如：
+            value = piece_values.get(piece.type, 0)  # 获取棋子的基础价值
             x, y = piece.position
 
-            # 增加攻击性奖励
-            attack_bonus = 0
-            possible_moves = state.get_all_possible_moves(piece)
-            for move in possible_moves:
-                target_piece = state.get_piece_at(move)
-                if target_piece and target_piece.color != piece.color:
-                    # 奖励攻击对方棋子
-                    target_value = piece_values.get(target_piece.type, 0)
-                    attack_bonus += target_value * 0.1  # 可调整系数
-            # 根据棋子颜色累加得分
-            if piece.color == self.color:
-                my_score += value + attack_bonus
-            else:
-                opponent_score += value + attack_bonus
+            # 位置奖励，根据棋子的位置动态调整分数（可以进一步优化）
+            position_value = attack_bonus[piece.color][y]
 
-            # position_value = self.get_position_value(piece.type, x, y)
-            # total_value = value + position_value
-            # if piece.color == self.color:
-            #     my_score += total_value
-            # else:
-            #     opponent_score += total_value
+            # 计算棋子总价值
+            total_value = value + position_value
+
+            if piece.color == self.color:
+                # 当前玩家的分数
+                my_score += total_value
+                my_piece_count += 1  # 统计当前玩家的棋子数量
+            else:
+                # 对手的分数
+                opponent_score += total_value
+                opponent_piece_count += 1  # 统计对手的棋子数量
+
+        # 棋子数量加权因子，增加棋子越多方的得分
+        if my_piece_count > 0 and opponent_piece_count > 0:
+            my_score *= (my_piece_count / (my_piece_count + opponent_piece_count))
+            opponent_score *= (opponent_piece_count / (my_piece_count + opponent_piece_count))
+
+        # 归一化得分，范围在 -1 到 1 之间，并考虑棋子数量的加权
         return (my_score - opponent_score) / (my_score + opponent_score + 1e-6)
 
     def get_position_value(self, piece_type, x, y):

@@ -17,6 +17,13 @@ class GameState:
         self.is_simulation = False  # 默认不处于模拟状态
         self.setup_pieces()
 
+    def __eq__(self, other):
+        if not isinstance(other, GameState):
+            return False
+
+        # 比较 GameState 的每个属性，比如棋盘布局、玩家状态等
+        return self.pieces == other.pieces and self.current_player == other.current_player
+
     # 以下是从 Board 类中移动过来的方法
 
     def setup_pieces(self):
@@ -44,6 +51,7 @@ class GameState:
         """从棋盘上移除位于给定位置的棋子"""
         if position in self.pieces:
             piece = self.pieces[position]
+            # print('remove piece:', piece)
             del self.pieces[position]
             piece.position = None  # 设置棋子的位置为 None，表示已被移除
 
@@ -54,6 +62,7 @@ class GameState:
         # 从旧位置移除棋子
         if old_position in self.pieces:
             del self.pieces[old_position]
+            # print('set_piece_position, old_position:', old_position, 'new:', target_x, target_y)
         # 将棋子添加到新位置
         self.pieces[(target_x, target_y)] = piece
         # 更新棋子对象的位置属性
@@ -87,6 +96,7 @@ class GameState:
         else:
             self.last_captured_piece = None
 
+        # print('piece:', piece, target_x, target_y)
         # 移动棋子
         self.set_piece_position(piece, target_x, target_y)
 
